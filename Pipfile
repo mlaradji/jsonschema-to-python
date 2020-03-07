@@ -1,0 +1,27 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+frozendict = "*"
+
+[requires]
+python_version = "3.8"
+
+[dev-packages]
+pre-commit = "*"
+black = "*"
+pylint = "*"
+mypy = "*"
+pydocstyle = "*"
+pycodestyle = "*"
+reorder-python-imports = "*"
+bandit = "*"
+bumpversion = "*"
+
+[pipenv]
+allow_prereleases = true
+
+[dev-packages.prospector]
+extras = [ "with-pyroma",]
