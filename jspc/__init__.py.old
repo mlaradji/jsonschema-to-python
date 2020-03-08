@@ -1,0 +1,159 @@
+# -*- coding: utf-8 -*-
+import typing as t
+
+from frozendict import frozendict
+import networkx as nx
+
+# Python indentation.
+INDENT: str = "    "
+
+JSONSchema = t.TypedDict(
+    "JSONSchema",
+    {
+        "$schema": str,
+        "$ref": str,
+        "$id": str,
+        "id": str,
+        "title": str,
+        "description": str,
+        "definitions": t.Dict[str, "JSONSchema"],
+        "type": t.Literal["object", "string", "number", "boolean", "null"],
+        "properties": t.Dict[str, "JSONSchema"],
+        "oneOf": t.List["JSONSchema"],
+        "anyOf": t.List["JSONSchema"],
+        "allOf": t.List["JSONSchema"],
+        "required": t.List[str],
+    },
+    total=False,
+)
+
+map_types: t.Final[t.Dict[str, str]] = frozendict(
+    {"string": "str", "number": "Union[float, int]", "boolean": "bool", "null": "None"}
+)
+
+print("from typing import Union\nfrom typing import TypedDict\n")
+
+class NestedTreeGraph(nx.DiGraph):
+    """Tree graph where every node is a tree."""
+    pass
+
+class JSONSchemaGraph:
+    graph: nx.DiGraph
+
+    def __init__(self, schema: JSONSchema):
+        self.root = "#"
+        self.graph = nx.DiGraph()
+        self.schema = schema
+        self._add_type(None, "#", schema)
+
+    def _add_type(
+        self, parent_node: str, current_node: str, schema: JSONSchema,
+    ) -> str:
+
+        # 20200307: @mlaradji: master - Currently, we only have output for when type is defined.
+        if schema["type"] in map_types:
+            return map_types[schema["type"]]
+
+        class_supers: t.List[str] = []
+
+        # Create optional class.
+        if optional_class_name := define_class(name, path + [name] + ["properties"], filter(
+            lambda p: p not in schema.get("required", []), schema.get("properties", {})), schema["properties"], total=False
+        ): class_supers.append(optional_class_name)
+        # Create class for required properties.
+        if required_class_name := define_class(name, path + [name] + ["properties"],
+            schema.get("required", []), schema["properties"], total=True
+        ): class_supers.append(required_class_name)
+        # Create definitions but don't add them as a super (yet).
+        schema_definitions = schema.get("definitions", {})
+        define_class(name, path + [name] + ["definitions"],
+            schema_definitions.keys(), schema_definitions, total=True
+        )
+
+        # Combine the classes through inheritance to get a dict with both required and optional keys.
+        if class_supers: 
+            combined_class = f"class {standardize_name(name, path)}({', '.join(class_supers)}):\n{INDENT}pass\n"
+
+            # Output the new classes defined.
+            print(combined_class)
+
+        return standardize_name(name, path)
+
+def unique_path_name(name: str, path: nx.Graph()) -> str:
+    # Abuse the fact that '"' is not allowed as part of a property name in JSON to create unique names for objects.
+    return (
+        "".join(map(lambda n: n.capitalize(), [*path[1:], name])) # Skip the first #.
+        + '"'.join([name, *path]).encode().hex()
+    )
+
+REF: t.Dict[str, str] = {}
+
+
+
+def define_class(name: str, path: t.List[str], properties: t.Iterable[str], schema_properties: t.Dict[str, JSONSchema], total: bool) -> t.Optional[str]:
+    """
+    Print out a new class with properties in `properties`.
+
+    :param total: True if all is required and False otherwise.
+    :returns: Name of the new class, or `None` if no class was created (if properties is empty).
+    """
+
+    class_name_suffix =  "Required" if total else "Optional"
+    class_name = f"{standardize_name(name, path)}{class_name_suffix}"
+    class_text = (
+        f"class {class_name}(TypedDict, total={total}):\n"
+    )
+
+    # Only create a class if we have some defined properties.
+    props = list(properties)
+
+    if not props:
+        return None
+
+    # Construct the attributes of the new class.
+    for prop in props:
+        property_type = return_type(
+            schema_properties[prop],
+            name=prop,
+            path=path + [name],
+        )
+        class_text += f"{INDENT}{prop}: {property_type}\n"
+    class_text += f"{INDENT}pass\n\n"
+
+    # Now output what we made
+    print(class_text)
+    return class_name
+
+schema = {
+    "type": "object",
+    "properties": {
+        "hi": {"type": "object", "properties": {"hello": {"type": "number"}, "test": {"type": "object", "properties": {"test1": {"type": "number"}}}}},
+        "hello": {"type": "number"},
+    },
+    "required": ["hi"],
+    "definitions": {
+        "status": {"type": "string"}
+    }
+}
+
+return_type(schema)
+print(REF)
+# schema = {
+#     "$schema": "http://json-schema.org/draft-07/schema#",
+#     "definitions": {
+#         "address": {
+#             "type": "object",
+#             "properties": {
+#                 "street_address": {"type": "string"},
+#                 "city": {"type": "string"},
+#                 "state": {"type": "string"},
+#             },
+#             "required": ["street_address", "city", "state"],
+#         }
+#     },
+#     "type": "object",
+#     "properties": {
+#         "billing_address": {"$ref": "#/definitions/address"},
+#         "shipping_address": {"$ref": "#/definitions/address"},
+#     },
+# }

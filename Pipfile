@@ -5,6 +5,9 @@ name = "pypi"
 
 [packages]
 frozendict = "*"
+networkx = "*"
+matplotlib = "*"
+eon = "*"
 
 [requires]
 python_version = "3.8"
@@ -19,6 +22,7 @@ pycodestyle = "*"
 reorder-python-imports = "*"
 bandit = "*"
 bumpversion = "*"
+python-semantic-release = "*"
 
 [pipenv]
 allow_prereleases = true
